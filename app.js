@@ -159,7 +159,7 @@ function clearCurrentSource() {
 
 function setPreviewSource(objectUrl) {
   const parsed = new URL(objectUrl);
-  if (parsed.protocol !== 'blob:' || parsed.origin !== window.location.origin) {
+  if (parsed.protocol !== 'blob:') {
     throw new Error('Unexpected preview source URL');
   }
   preview.src = parsed.toString();
@@ -278,6 +278,12 @@ exportBtn.addEventListener('click', async () => {
   exportBtn.disabled = true;
   setStatus('Preparing export…');
 
+  let combinedStream;
+  let recorder;
+  let frameTimer = null;
+  let stopDrawing = false;
+  let finished;
+
   try {
     const { width: outputWidth, height: outputHeight } = getTargetResolution(resolutionMode.value);
     const canvas = document.createElement('canvas');
@@ -294,18 +300,16 @@ exportBtn.addEventListener('click', async () => {
     const previewStream = preview.captureStream();
     const canvasStream = canvas.captureStream(30);
     const audioTracks = previewStream.getAudioTracks();
-    const combinedStream = new MediaStream([canvasStream.getVideoTracks()[0], ...audioTracks]);
+    combinedStream = new MediaStream([canvasStream.getVideoTracks()[0], ...audioTracks]);
 
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
       ? 'video/webm;codecs=vp9,opus'
       : 'video/webm;codecs=vp8,opus';
 
     const chunks = [];
-    const recorder = new MediaRecorder(combinedStream, { mimeType });
-    let stopDrawing = false;
-    let frameTimer = null;
+    recorder = new MediaRecorder(combinedStream, { mimeType });
 
-    const finished = new Promise((resolve, reject) => {
+    finished = new Promise((resolve, reject) => {
       recorder.addEventListener('stop', resolve, { once: true });
       recorder.addEventListener('error', () => reject(new Error('Recording failed')), { once: true });
     });
@@ -353,17 +357,13 @@ exportBtn.addEventListener('click', async () => {
       await preview.play();
     } catch (playError) {
       finishRecording();
+      if (finished) {
+        await finished;
+      }
       throw playError;
     }
     frameTimer = requestAnimationFrame(drawFrame);
     await finished;
-
-    if (frameTimer) {
-      cancelAnimationFrame(frameTimer);
-    }
-
-    combinedStream.getTracks().forEach((track) => track.stop());
-    preview.pause();
 
     const outputName = `trimmed-${Date.now()}.webm`;
     const blob = new Blob(chunks, { type: mimeType });
@@ -383,6 +383,19 @@ exportBtn.addEventListener('click', async () => {
     console.error(error);
     setStatus('Export failed. Try a shorter clip or a different input format.');
   } finally {
+    if (frameTimer) {
+      cancelAnimationFrame(frameTimer);
+    }
+    if (recorder?.state === 'recording') {
+      recorder.stop();
+      if (finished) {
+        await finished.catch(() => {});
+      }
+    }
+    if (combinedStream) {
+      combinedStream.getTracks().forEach((track) => track.stop());
+    }
+    preview.pause();
     exportBtn.disabled = false;
   }
 });

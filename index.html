@@ -22,7 +22,8 @@
       <section class="panel controls" id="controls" hidden>
         <h2>Trim selection</h2>
 
-        <div class="range-track">
+        <p id="rangeHelp">Use both sliders together to define the start and end of your selected clip.</p>
+        <div class="range-track" role="group" aria-labelledby="rangeHelp">
           <input id="startRange" type="range" min="0" max="0" value="0" step="0.01" aria-label="Trim start time" />
           <input id="endRange" type="range" min="0" max="0" value="0" step="0.01" aria-label="Trim end time" />
         </div>
