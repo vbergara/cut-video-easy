@@ -151,7 +151,7 @@ function drawFrame(context, canvas) {
   context.fillStyle = '#000'; context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(preview, (canvas.width - preview.videoWidth * scale) / 2, (canvas.height - preview.videoHeight * scale) / 2, preview.videoWidth * scale, preview.videoHeight * scale);
 }
-// Measure encoded output; recording WebM can lack duration metadata until EOF is read.
+// Measure the encoded file instead of trusting the requested selection duration.
 async function measureOutput(blob) {
   const video = document.createElement('video'); video.muted = true; video.preload = 'auto'; const url = URL.createObjectURL(blob);
   try {
@@ -161,6 +161,19 @@ async function measureOutput(blob) {
     if (!Number.isFinite(measured) || measured <= 0 || measured > 1e8) throw new Error('Could not verify the exported duration.');
     return measured;
   } finally { video.removeAttribute('src'); video.load(); URL.revokeObjectURL(url); }
+}
+async function finalizeMp4(recording, onConversionReady) {
+  if (!window.Mediabunny) throw new Error('The local MP4 muxer could not load. Reload the page and try again.');
+  const { Input, Output, Conversion, ALL_FORMATS, BlobSource, Mp4OutputFormat, BufferTarget } = window.Mediabunny;
+  const input = new Input({ source: new BlobSource(recording), formats: ALL_FORMATS });
+  try {
+    const output = new Output({ format: new Mp4OutputFormat({ fastStart: 'in-memory' }), target: new BufferTarget() });
+    const conversion = await Conversion.init({ input, output, copy: { mode: 'forced' } });
+    if (!conversion.isValid || conversion.discardedTracks.length) throw new Error('Could not package both video and audio as MP4.');
+    onConversionReady(conversion);
+    await conversion.execute();
+    return new Blob([output.target.buffer], { type: 'video/mp4' });
+  } finally { input.dispose(); }
 }
 function setBusy(busy) {
   exporting = busy; $('controls').disabled = busy; $('videoFile').disabled = busy; preview.controls = !busy;
@@ -173,7 +186,7 @@ $('exportBtn').addEventListener('click', async () => {
   if (!duration || exporting) return;
   if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream || !(window.AudioContext || window.webkitAudioContext)) { status('Export is unavailable in this browser. Try a current desktop Chrome or Edge.'); return; }
   const clipStart = start, clipEnd = end, clipLength = end - start;
-  let recorder, stream, timer, frame, watchdog, cancelled = false, finished;
+  let recorder, stream, timer, frame, watchdog, conversion, cancelled = false, finished;
   const previousMuted = preview.muted, previousRate = preview.playbackRate, previousVolume = preview.volume;
   setBusy(true); clearDownload(); clipPlayback = false; preview.pause(); $('exportProgress').value = 0; status('Preparing export… Keep this tab visible while it records.');
   cancelRecording = () => { cancelled = true; };
@@ -191,8 +204,8 @@ $('exportBtn').addEventListener('click', async () => {
     const context = canvas.getContext('2d'); drawFrame(context, canvas);
     stream = canvas.captureStream(30); audioSource.connect(audioDestination);
     audioDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track.clone()));
-    const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(type => MediaRecorder.isTypeSupported(type));
-    if (!mimeType) throw new Error('WebM export is unavailable in this browser. Try Chrome or Edge.');
+    const mimeType = ['video/mp4;codecs="avc1.42E01E,mp4a.40.2"', 'video/mp4;codecs="avc1,mp4a"'].find(type => MediaRecorder.isTypeSupported(type));
+    if (!mimeType) throw new Error('H.264/AAC MP4 recording is unavailable in this browser. Try a current Chrome or Edge.');
     recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8000000 });
     const chunks = [];
     recorder.addEventListener('dataavailable', e => { if (e.data.size) chunks.push(e.data); });
@@ -212,16 +225,20 @@ $('exportBtn').addEventListener('click', async () => {
     };
     paint(); status('Exporting in real time… Keep this tab visible.'); await finished;
     if (cancelled) { status('Export cancelled. Keep this tab visible to export again.'); return; }
+    status('Finalizing MP4…');
+    const recording = new Blob(chunks, { type: mimeType });
+    if (!recording.size) throw new Error('The browser produced an empty video. Please try again.');
+    cancelRecording = () => { cancelled = true; conversion?.cancel(); };
+    const blob = await finalizeMp4(recording, value => { conversion = value; if (cancelled) value.cancel(); });
+    if (cancelled) { status('Export cancelled.'); return; }
     status('Checking the exported duration…');
-    const blob = new Blob(chunks, { type: mimeType });
-    if (!blob.size) throw new Error('The browser produced an empty video. Please try again.');
     const measured = await measureOutput(blob);
     if (cancelled) { status('Export cancelled.'); return; }
     if (clipLength < 15 && measured >= 15) throw new Error('The recording reached 15 seconds. Shorten the selection slightly and export again; this file has not been offered for download.');
     if (Math.abs(measured - clipLength) > .3) throw new Error('The recording timing drifted. Keep this tab active and try exporting again.');
-    exportUrl = URL.createObjectURL(blob); const link = $('downloadLink'); link.href = exportUrl; link.download = `${sourceFile.name.replace(/\.[^.]+$/, '')}-trimmed.webm`; link.hidden = false;
+    exportUrl = URL.createObjectURL(blob); const link = $('downloadLink'); link.href = exportUrl; link.download = `${sourceFile.name.replace(/\.[^.]+$/, '')}-trimmed.mp4`; link.hidden = false;
     link.textContent = 'Download clip ↓'; status(`Ready to download · ${fmt(measured)}s · ${(blob.size / 1048576).toFixed(1)} MB${measured < 15 ? ' · verified under 15s' : ''}.`);
-  } catch (error) { status(`Export failed. ${error.message}`); }
+  } catch (error) { status(cancelled ? 'Export cancelled.' : `Export failed. ${error.message}`); }
   finally {
     clearTimeout(timer); clearInterval(watchdog); cancelAnimationFrame(frame);
     if (recorder && recorder.state !== 'inactive') { recorder.stop(); await finished?.catch(() => {}); }
