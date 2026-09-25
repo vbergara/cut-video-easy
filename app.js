@@ -130,6 +130,41 @@ async function seekTo(timeInSeconds) {
   await waitForEvent(preview, 'seeked');
 }
 
+function clearExportLink() {
+  if (exportObjectUrl) {
+    URL.revokeObjectURL(exportObjectUrl);
+    exportObjectUrl = '';
+  }
+  downloadLink.hidden = true;
+  downloadLink.removeAttribute('href');
+}
+
+function clearCurrentSource() {
+  sourceFile = undefined;
+  sourceDuration = 0;
+  selectionStart = 0;
+  selectionEnd = 0;
+  controls.hidden = true;
+
+  if (sourceObjectUrl) {
+    URL.revokeObjectURL(sourceObjectUrl);
+    sourceObjectUrl = '';
+  }
+
+  preview.pause();
+  preview.removeAttribute('src');
+  preview.load();
+  clearExportLink();
+}
+
+function setPreviewSource(objectUrl) {
+  const parsed = new URL(objectUrl);
+  if (parsed.protocol !== 'blob:' || parsed.origin !== window.location.origin) {
+    throw new Error('Unexpected preview source URL');
+  }
+  preview.src = parsed.toString();
+}
+
 function drawToCanvas(context, canvas, video, outputWidth, outputHeight) {
   const sourceRatio = video.videoWidth / video.videoHeight;
   const outputRatio = outputWidth / outputHeight;
@@ -159,28 +194,17 @@ videoFileInput.addEventListener('change', () => {
   }
 
   if (!file.type.startsWith('video/')) {
+    clearCurrentSource();
     setStatus('Please choose a valid video file.');
     return;
   }
 
-  if (sourceObjectUrl) {
-    URL.revokeObjectURL(sourceObjectUrl);
-  }
-  if (exportObjectUrl) {
-    URL.revokeObjectURL(exportObjectUrl);
-    exportObjectUrl = '';
-  }
+  clearCurrentSource();
 
   sourceFile = file;
   sourceObjectUrl = URL.createObjectURL(file);
-  if (!sourceObjectUrl.startsWith('blob:')) {
-    setStatus('Unable to load this file in preview.');
-    return;
-  }
-  preview.src = sourceObjectUrl;
+  setPreviewSource(sourceObjectUrl);
   preview.load();
-  downloadLink.hidden = true;
-  downloadLink.removeAttribute('href');
   setStatus('Loaded video. Reading metadata…');
 });
 
@@ -281,20 +305,39 @@ exportBtn.addEventListener('click', async () => {
     let stopDrawing = false;
     let frameTimer = null;
 
+    const finished = new Promise((resolve, reject) => {
+      recorder.addEventListener('stop', resolve, { once: true });
+      recorder.addEventListener('error', () => reject(new Error('Recording failed')), { once: true });
+    });
+
+    const finishRecording = () => {
+      if (stopDrawing) {
+        return;
+      }
+      stopDrawing = true;
+      preview.pause();
+      seekTo(selectionEnd)
+        .then(() => {
+          drawToCanvas(context, canvas, preview, outputWidth, outputHeight);
+          recorder.requestData();
+          recorder.stop();
+        })
+        .catch(() => {
+          recorder.stop();
+        });
+    };
+
     const drawFrame = () => {
       if (stopDrawing) {
         return;
       }
 
-      drawToCanvas(context, canvas, preview, outputWidth, outputHeight);
-
-      if (preview.currentTime >= selectionEnd || preview.ended) {
-        stopDrawing = true;
-        preview.pause();
-        recorder.stop();
+      if (preview.currentTime + 1 / 60 >= selectionEnd || preview.ended) {
+        finishRecording();
         return;
       }
 
+      drawToCanvas(context, canvas, preview, outputWidth, outputHeight);
       frameTimer = requestAnimationFrame(drawFrame);
     };
 
@@ -304,19 +347,14 @@ exportBtn.addEventListener('click', async () => {
       }
     });
 
-    const finished = new Promise((resolve) => {
-      recorder.addEventListener(
-        'stop',
-        () => {
-          setTimeout(resolve, 0);
-        },
-        { once: true }
-      );
-    });
-
     setStatus('Export in progress…');
-    await preview.play();
     recorder.start(200);
+    try {
+      await preview.play();
+    } catch (playError) {
+      finishRecording();
+      throw playError;
+    }
     frameTimer = requestAnimationFrame(drawFrame);
     await finished;
 
