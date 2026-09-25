@@ -158,11 +158,10 @@ function clearCurrentSource() {
 }
 
 function setPreviewSource(objectUrl) {
-  const parsed = new URL(objectUrl);
-  if (parsed.protocol !== 'blob:') {
+  if (!objectUrl.startsWith('blob:')) {
     throw new Error('Unexpected preview source URL');
   }
-  preview.src = parsed.toString();
+  preview.src = objectUrl;
 }
 
 function drawToCanvas(context, canvas, video, outputWidth, outputHeight) {
@@ -336,12 +335,11 @@ exportBtn.addEventListener('click', async () => {
         return;
       }
 
+      drawToCanvas(context, canvas, preview, outputWidth, outputHeight);
       if (preview.currentTime + 1 / 60 >= selectionEnd || preview.ended) {
         finishRecording();
         return;
       }
-
-      drawToCanvas(context, canvas, preview, outputWidth, outputHeight);
       frameTimer = requestAnimationFrame(drawFrame);
     };
 

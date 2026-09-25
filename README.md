@@ -14,7 +14,7 @@ A simple, local, client-side video trimmer and cutter tool.
 
 ## Usage
 
-1. Serve the repository from a local HTTP server (for example, `python -m http.server`) and open it in a modern browser.
+1. Open `index.html` directly in a modern browser (or serve it from a local HTTP server if preferred).
 2. Load a video file.
 3. Adjust the clip range manually or use trim buttons/presets.
 4. Choose export resolution mode.
