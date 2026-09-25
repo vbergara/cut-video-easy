@@ -58,15 +58,31 @@ const assert = require('node:assert/strict');
     const message = await page.locator('#status').innerText(); console.log('15-second export:', message);
     assert.equal(await page.locator('#downloadLink').isVisible(), true, message);
     assert.match(message, /verified under 15s/);
+    assert.match(await page.locator('#downloadLink').getAttribute('download'), /\.mp4$/);
     const output = await page.evaluate(async () => {
       const blob = await (await fetch(document.querySelector('#downloadLink').href)).blob();
       const context = new AudioContext();
       try {
         const audio = await context.decodeAudioData(await blob.arrayBuffer());
         const samples = audio.getChannelData(0);
-        return {audioDuration: audio.duration, peak: samples.reduce((max, value) => Math.max(max, Math.abs(value)), 0)};
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        const header = new TextDecoder('latin1').decode(bytes.subarray(0, Math.min(bytes.length, 4096)));
+        const view = new DataView(bytes.buffer);
+        const boxes = [];
+        for (let offset = 0; offset + 8 <= bytes.length;) {
+          const size = view.getUint32(offset);
+          const kind = new TextDecoder().decode(bytes.subarray(offset + 4, offset + 8));
+          boxes.push(kind);
+          if (size < 8) break;
+          offset += size;
+        }
+        return {type: blob.type, audioDuration: audio.duration, peak: samples.reduce((max, value) => Math.max(max, Math.abs(value)), 0), brands: header.slice(0, 32), h264: header.includes('avc1'), aac: header.includes('mp4a'), boxes};
       } finally { await context.close(); }
     });
+    assert.match(output.type, /^video\/mp4/);
+    assert.ok(output.brands.includes('ftyp'), JSON.stringify(output));
+    assert.ok(output.h264 && output.aac, JSON.stringify(output));
+    assert.ok(output.boxes.includes('moov') && output.boxes.includes('mdat') && !output.boxes.includes('moof'), JSON.stringify(output));
     assert.ok(output.audioDuration < 15 && output.audioDuration > 14.5, JSON.stringify(output));
     assert.ok(output.peak > .05, 'Export must preserve audible source audio');
     console.log('Encoded audio:', output);
