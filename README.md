@@ -9,7 +9,7 @@ A simple, local, client-side video trimmer and cutter tool.
 - Directional trimming using customizable seconds (for example, trim 5 seconds from beginning/end)
 - Final-duration presets (5s, 10s, 15s)
 - Compound adjustments: combine presets, directional trims, and manual selection
-- Export trimmed output in-browser with ffmpeg.wasm
+- Export trimmed output in-browser (WebM)
 - Keep source resolution or force upscale to 1280x720 / 1920x1080
 
 ## Usage
@@ -23,4 +23,4 @@ A simple, local, client-side video trimmer and cutter tool.
 ## Notes
 
 - All processing is done in the browser (no backend).
-- First export may take longer while ffmpeg.wasm loads.
+- Export uses native browser recording APIs (MediaRecorder + Canvas).

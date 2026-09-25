@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cut Video Easy</title>
     <link rel="stylesheet" href="styles.css" />
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.15/dist/umd/ffmpeg.js"></script>
-    <script src="https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
   </head>
   <body>
     <main class="container">
@@ -25,8 +23,8 @@
         <h2>Trim selection</h2>
 
         <div class="range-track">
-          <input id="startRange" type="range" min="0" max="0" value="0" step="0.01" />
-          <input id="endRange" type="range" min="0" max="0" value="0" step="0.01" />
+          <input id="startRange" type="range" min="0" max="0" value="0" step="0.01" aria-label="Trim start time" />
+          <input id="endRange" type="range" min="0" max="0" value="0" step="0.01" aria-label="Trim end time" />
         </div>
 
         <div class="row">

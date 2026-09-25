@@ -19,10 +19,10 @@ let sourceFile;
 let sourceDuration = 0;
 let selectionStart = 0;
 let selectionEnd = 0;
-let ffmpeg;
-let ffmpegLoadingPromise;
 let sourceWidth = 0;
 let sourceHeight = 0;
+let sourceObjectUrl = '';
+let exportObjectUrl = '';
 
 const EPSILON = 0.01;
 
@@ -103,34 +103,53 @@ function applyTrimFromEnd(amount) {
   syncUI();
 }
 
-function getScaleFilter(mode) {
+function getTargetResolution(mode) {
   if (mode === '720p') {
-    return 'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2';
+    return { width: 1280, height: 720 };
   }
 
   if (mode === '1080p') {
-    return 'scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2';
+    return { width: 1920, height: 1080 };
   }
 
-  return '';
+  return { width: sourceWidth, height: sourceHeight };
 }
 
-async function ensureFFmpegLoaded() {
-  if (ffmpeg) {
-    return ffmpeg;
+function waitForEvent(target, eventName) {
+  return new Promise((resolve) => {
+    target.addEventListener(eventName, resolve, { once: true });
+  });
+}
+
+async function seekTo(timeInSeconds) {
+  if (Math.abs(preview.currentTime - timeInSeconds) < EPSILON) {
+    return;
   }
 
-  if (!ffmpegLoadingPromise) {
-    const { FFmpeg } = window.FFmpeg;
-    ffmpeg = new FFmpeg();
-    ffmpegLoadingPromise = ffmpeg.load({
-      coreURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
-      wasmURL: 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm'
-    });
+  preview.currentTime = timeInSeconds;
+  await waitForEvent(preview, 'seeked');
+}
+
+function drawToCanvas(context, canvas, video, outputWidth, outputHeight) {
+  const sourceRatio = video.videoWidth / video.videoHeight;
+  const outputRatio = outputWidth / outputHeight;
+
+  let drawWidth = outputWidth;
+  let drawHeight = outputHeight;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  if (sourceRatio > outputRatio) {
+    drawHeight = outputWidth / sourceRatio;
+    offsetY = (outputHeight - drawHeight) / 2;
+  } else {
+    drawWidth = outputHeight * sourceRatio;
+    offsetX = (outputWidth - drawWidth) / 2;
   }
 
-  await ffmpegLoadingPromise;
-  return ffmpeg;
+  context.fillStyle = '#000';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
 }
 
 videoFileInput.addEventListener('change', () => {
@@ -139,8 +158,18 @@ videoFileInput.addEventListener('change', () => {
     return;
   }
 
+  if (!file.type.startsWith('video/')) {
+    setStatus('Please choose a valid video file.');
+    return;
+  }
+
+  if (sourceObjectUrl) {
+    URL.revokeObjectURL(sourceObjectUrl);
+  }
+
   sourceFile = file;
-  preview.src = URL.createObjectURL(file);
+  sourceObjectUrl = URL.createObjectURL(file);
+  preview.src = sourceObjectUrl;
   preview.load();
   downloadLink.hidden = true;
   setStatus('Loaded video. Reading metadata…');
@@ -208,44 +237,93 @@ exportBtn.addEventListener('click', async () => {
     return;
   }
 
+  if (typeof MediaRecorder === 'undefined') {
+    setStatus('This browser does not support in-browser recording.');
+    return;
+  }
+
   exportBtn.disabled = true;
-  setStatus('Preparing ffmpeg… This may take a moment the first time.');
+  setStatus('Preparing export…');
 
   try {
-    const ffmpegInstance = await ensureFFmpegLoaded();
-    const { fetchFile } = window.FFmpegUtil;
+    const { width: outputWidth, height: outputHeight } = getTargetResolution(resolutionMode.value);
+    const canvas = document.createElement('canvas');
+    canvas.width = outputWidth;
+    canvas.height = outputHeight;
+    const context = canvas.getContext('2d');
 
-    const inputName = `input-${Date.now()}-${sourceFile.name}`;
-    const outputName = `trimmed-${Date.now()}.mp4`;
-
-    await ffmpegInstance.writeFile(inputName, await fetchFile(sourceFile));
-
-    const trimStart = String(round2(selectionStart));
-    const trimEnd = String(round2(selectionEnd));
-
-    const args = ['-ss', trimStart, '-to', trimEnd, '-i', inputName];
-
-    const filter = getScaleFilter(resolutionMode.value);
-    if (filter) {
-      args.push('-vf', filter);
+    if (!context) {
+      throw new Error('Canvas 2D context unavailable');
     }
 
-    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-c:a', 'aac', '-movflags', '+faststart', outputName);
+    await seekTo(selectionStart);
+
+    const previewStream = preview.captureStream();
+    const canvasStream = canvas.captureStream(30);
+    const audioTracks = previewStream.getAudioTracks();
+    const combinedStream = new MediaStream([canvasStream.getVideoTracks()[0], ...audioTracks]);
+
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+      ? 'video/webm;codecs=vp9,opus'
+      : 'video/webm;codecs=vp8,opus';
+
+    const chunks = [];
+    const recorder = new MediaRecorder(combinedStream, { mimeType });
+    let stopDrawing = false;
+    let frameTimer = null;
+
+    const drawFrame = () => {
+      if (stopDrawing) {
+        return;
+      }
+
+      drawToCanvas(context, canvas, preview, outputWidth, outputHeight);
+
+      if (preview.currentTime >= selectionEnd || preview.ended) {
+        stopDrawing = true;
+        preview.pause();
+        recorder.stop();
+        return;
+      }
+
+      frameTimer = requestAnimationFrame(drawFrame);
+    };
+
+    recorder.addEventListener('dataavailable', (event) => {
+      if (event.data.size > 0) {
+        chunks.push(event.data);
+      }
+    });
+
+    const finished = new Promise((resolve) => {
+      recorder.addEventListener('stop', resolve, { once: true });
+    });
 
     setStatus('Export in progress…');
-    await ffmpegInstance.exec(args);
+    recorder.start(200);
+    await preview.play();
+    frameTimer = requestAnimationFrame(drawFrame);
+    await finished;
 
-    const fileData = await ffmpegInstance.readFile(outputName);
-    const blob = new Blob([fileData.buffer], { type: 'video/mp4' });
-    const url = URL.createObjectURL(blob);
+    if (frameTimer) {
+      cancelAnimationFrame(frameTimer);
+    }
 
-    downloadLink.href = url;
+    combinedStream.getTracks().forEach((track) => track.stop());
+    preview.pause();
+
+    const outputName = `trimmed-${Date.now()}.webm`;
+    const blob = new Blob(chunks, { type: mimeType });
+
+    if (exportObjectUrl) {
+      URL.revokeObjectURL(exportObjectUrl);
+    }
+    exportObjectUrl = URL.createObjectURL(blob);
+
+    downloadLink.href = exportObjectUrl;
     downloadLink.download = outputName;
     downloadLink.textContent = `Download ${outputName}`;
     downloadLink.hidden = false;
-
-    await ffmpegInstance.deleteFile(inputName);
-    await ffmpegInstance.deleteFile(outputName);
 
     setStatus('Export completed. Download your trimmed video.');
   } catch (error) {
@@ -253,5 +331,14 @@ exportBtn.addEventListener('click', async () => {
     setStatus('Export failed. Try a shorter clip or a different input format.');
   } finally {
     exportBtn.disabled = false;
+  }
+});
+
+window.addEventListener('beforeunload', () => {
+  if (sourceObjectUrl) {
+    URL.revokeObjectURL(sourceObjectUrl);
+  }
+  if (exportObjectUrl) {
+    URL.revokeObjectURL(exportObjectUrl);
   }
 });
