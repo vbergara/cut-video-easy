@@ -1,81 +1,15 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cut Video Easy</title>
-    <link rel="stylesheet" href="styles.css" />
-  </head>
-  <body>
-    <main class="container">
-      <h1>Cut Video Easy</h1>
-      <p class="subtitle">Client-side video trimmer and cutter. No backend required.</p>
-
-      <section class="panel">
-        <label class="file-input">
-          <span>Load video</span>
-          <input id="videoFile" type="file" accept="video/*" />
-        </label>
-        <video id="preview" controls></video>
-      </section>
-
-      <section class="panel controls" id="controls" hidden>
-        <h2>Trim selection</h2>
-
-        <p id="rangeHelp">Use both sliders together to define the start and end of your selected clip.</p>
-        <div class="range-track" role="group" aria-labelledby="rangeHelp">
-          <input id="startRange" type="range" min="0" max="0" value="0" step="0.01" aria-label="Trim start time" />
-          <input id="endRange" type="range" min="0" max="0" value="0" step="0.01" aria-label="Trim end time" />
-        </div>
-
-        <div class="row">
-          <label>
-            Start (s)
-            <input id="startInput" type="number" min="0" step="0.01" value="0" />
-          </label>
-          <label>
-            End (s)
-            <input id="endInput" type="number" min="0" step="0.01" value="0" />
-          </label>
-          <label>
-            Duration (s)
-            <input id="durationInput" type="number" readonly />
-          </label>
-        </div>
-
-        <div class="row">
-          <label>
-            Directional trim amount (s)
-            <input id="trimSeconds" type="number" min="0.1" step="0.1" value="5" />
-          </label>
-          <button id="trimFromStart" type="button">Trim from beginning</button>
-          <button id="trimFromEnd" type="button">Trim from end</button>
-        </div>
-
-        <div class="row presets">
-          <span>Final duration presets:</span>
-          <button class="preset" type="button" data-seconds="5">5s</button>
-          <button class="preset" type="button" data-seconds="10">10s</button>
-          <button class="preset" type="button" data-seconds="15">15s</button>
-        </div>
-
-        <div class="row">
-          <label>
-            Export resolution
-            <select id="resolutionMode">
-              <option value="source">Use source dimensions</option>
-              <option value="720p">Force 1280×720</option>
-              <option value="1080p">Force 1920×1080</option>
-            </select>
-          </label>
-          <button id="exportBtn" type="button">Export video</button>
-        </div>
-
-        <p id="status" class="status"></p>
-        <a id="downloadLink" hidden>Download trimmed video</a>
-      </section>
-    </main>
-
-    <script src="app.js" defer></script>
-  </body>
-</html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cut Video Easy</title><link rel="stylesheet" href="styles.css"></head><body>
+<main class="container"><header><a class="brand" href="./"><b>✂</b> Cut Video Easy</a><span class="privacy">● On your device. Always.</span></header>
+<div class="intro"><p class="eyebrow">KEEP THE GOOD PART</p><h1>A little less.<br><span>Just right.</span></h1><p>Find your moment. Trim the rest. Make it yours.</p></div>
+<section class="workspace" aria-label="Video editor"><div class="file-bar"><div><span id="fileName">Your next great clip starts here</span><small id="fileMeta">No uploads. No account needed.</small></div><label class="button secondary" for="videoFile">Load video</label><input class="sr-only" id="videoFile" type="file" accept="video/*"></div>
+<div id="dropZone" class="preview-area"><div id="emptyState"><div class="upload-icon">↥</div><h2>Drop a video here</h2><p>or <label for="videoFile">browse your files</label> to get started</p><small>Choose a video your browser can play</small></div><video id="preview" controls playsinline hidden></video></div>
+<fieldset id="controls" hidden><div class="timeline-heading"><div><h2>Your selection <span id="selectionBadge">0.00s</span></h2><p>Drag the middle to move. Drag either edge to resize.</p></div><button id="playSelection" class="secondary">▶ Preview clip</button></div>
+<div class="timeline-wrap"><div id="timeline" aria-label="Video timeline"><div id="thumbnails"></div><div id="shadeBefore" class="shade"></div><div id="shadeAfter" class="shade"></div><div id="selection"><div id="moveSelection" role="slider" tabindex="0" aria-label="Move selected clip" aria-describedby="keyboardHelp"><span>⠿</span></div><div id="startHandle" class="handle start" role="slider" tabindex="0" aria-label="Selection start" aria-describedby="keyboardHelp"></div><div id="endHandle" class="handle end" role="slider" tabindex="0" aria-label="Selection end" aria-describedby="keyboardHelp"></div></div><div id="playhead"></div></div><div id="ruler"></div></div>
+<div class="timeline-footer"><span id="thumbnailStatus">Reading frames…</span><span id="keyboardHelp">Arrow keys: 0.1s · Shift + arrow: 1s</span></div>
+<div class="tools-grid"><section class="tool"><p class="step">01 / SET THE LENGTH</p><h3>Keep a moment</h3><div class="segmented" aria-label="Clip duration presets"><button class="preset" data-seconds="5">5s</button><button class="preset" data-seconds="10">10s</button><button class="preset" data-seconds="15">15s <small>safe</small></button></div><p class="hint">The 15s preset uses 14.9s for a little breathing room.</p><label class="inline-label" for="durationInput">Custom length <span class="number-wrap"><input id="durationInput" type="number" min="0.1" step="0.01"> s</span></label></section>
+<section class="tool"><p class="step">02 / TRIM A LITTLE MORE</p><h3>Take it off the edges</h3><div class="trim-row"><div class="segmented" aria-label="Trim amount shortcuts"><button class="trim-preset active" data-seconds="5">5s</button><button class="trim-preset" data-seconds="10">10s</button><button class="trim-preset" data-seconds="15">15s</button></div><label class="number-wrap"><input id="trimSeconds" aria-label="Custom trim amount in seconds" type="number" min="0.01" step="0.01" value="5"> s</label></div><div class="trim-actions"><button id="trimFromStart" class="secondary">↦ From beginning</button><button id="trimFromEnd" class="secondary">From end ↤</button></div><p class="hint">Removes this amount from your current selection.</p></section>
+<section class="tool precision"><p class="step">03 / FINE-TUNE</p><h3>Every second counts</h3><div class="time-fields"><label>Start <span class="number-wrap"><input id="startInput" type="number" min="0" step="0.01"> s</span></label><label>End <span class="number-wrap"><input id="endInput" type="number" min="0.1" step="0.01"> s</span></label></div><div class="reset-row"><button id="undoBtn" class="text-button" disabled>↶ Undo</button><button id="resetBtn" class="text-button">Reset selection</button></div></section></div>
+<div class="export-bar"><div><label for="resolutionMode">Export size</label><select id="resolutionMode"><option value="source">Original resolution</option><option value="720p">1280 × 720 · fit</option><option value="1080p">1920 × 1080 · fit</option></select></div><span class="export-note">WebM video · processed locally</span><button id="exportBtn" class="primary">Export clip ↗</button></div></fieldset>
+<div class="feedback"><p id="status" role="status" aria-live="polite">Your video stays in your browser, from start to finish.</p><progress id="exportProgress" max="1" value="0" hidden></progress><button id="cancelExport" class="secondary" hidden>Cancel export</button><a id="downloadLink" class="button primary" hidden>Download clip ↓</a></div></section>
+<footer><span>Small edits. Better moments.</span><span>100% client-side · No files leave your device</span></footer></main><script src="trim.js" defer></script><script src="app.js" defer></script></body></html>
