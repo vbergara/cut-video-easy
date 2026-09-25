@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cut Video Easy</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Cut Video Easy</h1>
+      <p class="subtitle">Client-side video trimmer and cutter. No backend required.</p>
+
+      <section class="panel">
+        <label class="file-input">
+          <span>Load video</span>
+          <input id="videoFile" type="file" accept="video/*" />
+        </label>
+        <video id="preview" controls></video>
+      </section>
+
+      <section class="panel controls" id="controls" hidden>
+        <h2>Trim selection</h2>
+
+        <p id="rangeHelp">Use both sliders together to define the start and end of your selected clip.</p>
+        <div class="range-track" role="group" aria-labelledby="rangeHelp">
+          <input id="startRange" type="range" min="0" max="0" value="0" step="0.01" aria-label="Trim start time" />
+          <input id="endRange" type="range" min="0" max="0" value="0" step="0.01" aria-label="Trim end time" />
+        </div>
+
+        <div class="row">
+          <label>
+            Start (s)
+            <input id="startInput" type="number" min="0" step="0.01" value="0" />
+          </label>
+          <label>
+            End (s)
+            <input id="endInput" type="number" min="0" step="0.01" value="0" />
+          </label>
+          <label>
+            Duration (s)
+            <input id="durationInput" type="number" readonly />
+          </label>
+        </div>
+
+        <div class="row">
+          <label>
+            Directional trim amount (s)
+            <input id="trimSeconds" type="number" min="0.1" step="0.1" value="5" />
+          </label>
+          <button id="trimFromStart" type="button">Trim from beginning</button>
+          <button id="trimFromEnd" type="button">Trim from end</button>
+        </div>
+
+        <div class="row presets">
+          <span>Final duration presets:</span>
+          <button class="preset" type="button" data-seconds="5">5s</button>
+          <button class="preset" type="button" data-seconds="10">10s</button>
+          <button class="preset" type="button" data-seconds="15">15s</button>
+        </div>
+
+        <div class="row">
+          <label>
+            Export resolution
+            <select id="resolutionMode">
+              <option value="source">Use source dimensions</option>
+              <option value="720p">Force 1280×720</option>
+              <option value="1080p">Force 1920×1080</option>
+            </select>
+          </label>
+          <button id="exportBtn" type="button">Export video</button>
+        </div>
+
+        <p id="status" class="status"></p>
+        <a id="downloadLink" hidden>Download trimmed video</a>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
