@@ -10,7 +10,7 @@ A simple, local, client-side video trimmer and cutter tool.
 - Final-duration presets (5s, 10s, 15s)
 - Compound adjustments: combine presets, directional trims, and manual selection
 - Export trimmed output in-browser (WebM)
-- Keep source resolution or force upscale to 1280x720 / 1920x1080
+- Export with source dimensions or force upscale to 1280x720 / 1920x1080
 
 ## Usage
 

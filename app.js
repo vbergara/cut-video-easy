@@ -161,7 +161,7 @@ function setPreviewSource(objectUrl) {
   if (!objectUrl.startsWith('blob:')) {
     throw new Error('Unexpected preview source URL');
   }
-  preview.src = objectUrl;
+  preview.setAttribute('src', encodeURI(objectUrl));
 }
 
 function drawToCanvas(context, canvas, video, outputWidth, outputHeight) {
@@ -301,9 +301,11 @@ exportBtn.addEventListener('click', async () => {
     const audioTracks = previewStream.getAudioTracks();
     combinedStream = new MediaStream([canvasStream.getVideoTracks()[0], ...audioTracks]);
 
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-      ? 'video/webm;codecs=vp9,opus'
-      : 'video/webm;codecs=vp8,opus';
+    const mimeCandidates = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+    const mimeType = mimeCandidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+    if (!mimeType) {
+      throw new Error('No supported recording format found');
+    }
 
     const chunks = [];
     recorder = new MediaRecorder(combinedStream, { mimeType });
