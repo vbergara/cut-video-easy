@@ -166,12 +166,21 @@ videoFileInput.addEventListener('change', () => {
   if (sourceObjectUrl) {
     URL.revokeObjectURL(sourceObjectUrl);
   }
+  if (exportObjectUrl) {
+    URL.revokeObjectURL(exportObjectUrl);
+    exportObjectUrl = '';
+  }
 
   sourceFile = file;
   sourceObjectUrl = URL.createObjectURL(file);
+  if (!sourceObjectUrl.startsWith('blob:')) {
+    setStatus('Unable to load this file in preview.');
+    return;
+  }
   preview.src = sourceObjectUrl;
   preview.load();
   downloadLink.hidden = true;
+  downloadLink.removeAttribute('href');
   setStatus('Loaded video. Reading metadata…');
 });
 
@@ -296,12 +305,18 @@ exportBtn.addEventListener('click', async () => {
     });
 
     const finished = new Promise((resolve) => {
-      recorder.addEventListener('stop', resolve, { once: true });
+      recorder.addEventListener(
+        'stop',
+        () => {
+          setTimeout(resolve, 0);
+        },
+        { once: true }
+      );
     });
 
     setStatus('Export in progress…');
-    recorder.start(200);
     await preview.play();
+    recorder.start(200);
     frameTimer = requestAnimationFrame(drawFrame);
     await finished;
 
