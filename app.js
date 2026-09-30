@@ -9,6 +9,17 @@ const timestamp = n => {
   return `${Math.floor(tenths / 600)}:${((tenths % 600) / 10).toFixed(1).padStart(4, '0')}`;
 };
 const status = message => { $('status').textContent = message; };
+function getExportResolution(mode = $('resolutionMode').value) {
+  const multiplier = ['2', '3', '4'].includes(mode) ? Number(mode) : 1;
+  return { width: preview.videoWidth * multiplier, height: preview.videoHeight * multiplier };
+}
+function updateResolutionOptions() {
+  for (const option of $('resolutionMode').options) {
+    const { width, height } = getExportResolution(option.value);
+    const label = option.value === 'source' ? 'Original' : `Upscale ${option.value}×`;
+    option.textContent = `${label} · ${width} × ${height}`;
+  }
+}
 function clearDownload() {
   if (exportUrl) URL.revokeObjectURL(exportUrl);
   exportUrl = ''; $('downloadLink').hidden = true; $('downloadLink').removeAttribute('href');
@@ -63,6 +74,7 @@ async function loadFile(file) {
     if (token !== generation) return;
     if (!Number.isFinite(preview.duration) || preview.duration <= 0) throw new Error('This file has no readable duration. Try a video with duration metadata.');
     duration = preview.duration; start = 0; end = duration;
+    updateResolutionOptions();
     $('fileName').textContent = file.name; $('fileMeta').textContent = `${timestamp(duration)} · ${preview.videoWidth} × ${preview.videoHeight} · ${(file.size / 1048576).toFixed(1)} MB`;
     $('preview').hidden = false; $('emptyState').hidden = true; $('controls').hidden = false;
     $('ruler').replaceChildren(...Array.from({ length: 7 }, (_, i) => { const span = document.createElement('span'); span.textContent = timestamp(duration * i / 6); return span; }));
@@ -198,9 +210,10 @@ $('exportBtn').addEventListener('click', async () => {
     }
     await audioContext.resume(); await seek(preview, clipStart);
     if (cancelled) { status('Export cancelled.'); return; }
-    const canvas = document.createElement('canvas'); const mode = $('resolutionMode').value;
-    canvas.width = mode === '720p' ? 1280 : mode === '1080p' ? 1920 : preview.videoWidth;
-    canvas.height = mode === '720p' ? 720 : mode === '1080p' ? 1080 : preview.videoHeight;
+    const canvas = document.createElement('canvas');
+    const { width, height } = getExportResolution();
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext('2d'); drawFrame(context, canvas);
     stream = canvas.captureStream(30); audioSource.connect(audioDestination);
     audioDestination.stream.getAudioTracks().forEach(track => stream.addTrack(track.clone()));

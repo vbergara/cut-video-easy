@@ -18,7 +18,7 @@ Use **Undo** to reverse an edit, or **Reset selection** to select the whole vide
 ## Export
 
 - Uses native Canvas, Web Audio, and MediaRecorder APIs; exports MP4 with H.264 video and AAC source audio. The bundled [Mediabunny 1.59.0](https://mediabunny.dev/) muxer copies those encoded streams into a regular fast-start MP4 for broader compatibility. Its MPL-2.0 license is in `vendor/MEDIABUNNY-LICENSE.txt`.
-- Original resolution, 1280 × 720, or 1920 × 1080. Fit modes preserve aspect ratio with black padding.
+- Original resolution, or upscale 2×, 3×, or 4×. Each option shows the resulting width and height for the loaded video. Multipliers preserve the original aspect ratio and orientation without adding padding; for example, 720 × 1280 at 2× exports as 1440 × 2560. Upscaling enlarges existing pixels; it does not recover detail missing from the source.
 - Records in real time: keep the tab visible. Switching away cancels recording to avoid a background-throttled export. A cancel button is also available.
 - Browser recording re-encodes video and is not frame-accurate or lossless. Actual output duration is checked and displayed before download.
 - Input and MP4 recording support depend on your browser. Chrome and Edge are the primary targets. When H.264/AAC recording is unavailable, the app explains the limitation instead of producing a mislabeled file.
@@ -35,6 +35,12 @@ The browser integration test needs Playwright and installed Chrome:
 
 ```sh
 node tests/browser.cjs
+```
+
+Check multiplier labels and actual MP4 dimensions for landscape and portrait videos:
+
+```sh
+node tests/upscale.browser.cjs
 ```
 
 If Playwright is installed outside this project, set `PLAYWRIGHT_MODULE` to its module path. The test starts a temporary local static server, creates a real video with audio, exercises dragging/resizing/presets/trimming/undo/keyboard controls, checks export duration and audible audio, tests repeat export/cancellation, and checks mobile layout. It saves screenshots under `tests/` (ignored by Git). No server is needed to use the app.
